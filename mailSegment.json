@@ -1,0 +1,9 @@
+{
+  "appId": "c8ea4f4c-6137-4d7a-9f6d-2bffa61cdcf7",
+  "html": "Mailing test",
+  "clickAction": "",
+  "from": "",
+  "subject": "schedule hello",
+  "topicName": "allUsers",
+  "isScheduled": false
+}

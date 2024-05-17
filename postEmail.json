@@ -1,0 +1,11 @@
+{
+    "appId": "38510b76-10f6-4e82-91a5-27fb7c2bf6e8",
+    "body": "<h1>Test</h1>",
+    "clickAction": "",
+    "from": "johndoe@mic.io",
+    "subject": "Hello",
+    "scenarioId": "b59852fc-8690-4f6b-92b8-579e516c342d",
+    "topicName": "allUser",
+    "isScheduled": true,
+    "schedledDate": 1714571604
+}

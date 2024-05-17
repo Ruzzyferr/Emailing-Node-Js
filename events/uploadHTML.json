@@ -1,0 +1,8 @@
+{
+  "body": {
+    "appId": "4a549970-cd0a-4a1b-a591-1c1ae88a0eb3",
+    "scenarioId": "898b9e48-224f-4aa5-994d-e783bbdf0d49",
+    "htmlText": "<h1> <%= user.firstname %> <%= user.lastname %> </h1>"
+  },
+  "queryStringParameters": { "appId": "4a549970-cd0a-4a1b-a591-1c1ae88a0eb3"}
+}

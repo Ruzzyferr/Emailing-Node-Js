@@ -1,0 +1,497 @@
+service: email-backend
+
+frameworkVersion: "3"
+
+custom:
+  profile:
+    dev:
+      accountName: yourusername
+      accountId: "yourId"
+  myStage: ${opt:stage, self:provider.stage}
+  myProfile:
+    dev: default
+  AUTHORIZER_ARN: arn:aws:yourLambdaArn
+  prune:
+    automatic: true
+    number: 3
+
+plugins:
+  - serverless-prune-plugin
+  - serverless-offline
+
+
+provider:
+  name: aws
+  runtime: nodejs16.x
+  stage: ${opt:stage, "dev"}
+  profile: ${self:custom.myProfile.${self:custom.myStage}}
+  region: eu-north-1
+  environment:
+    TOPICS_TABLE: topicsTable
+    EMAIL_TEMPLATES_BUCKET_NAME: email-backend
+    EMAIL_LOGS_TABLE: emailLogsTable
+    SCENARIO_TABLE: 
+    EMAIL_TABLE: 
+    TOKEN_TABLE: 
+    FAILED_EMAIL_TABLE:
+    SMTP_HOST: 
+    SMTP_PORT: 
+    SMTP_USER: 
+    SMTP_PASS: 
+
+  apiGateway:
+    apiKeys:
+      - EmailBackendApiKey
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:DeleteItem
+            - dynamodb:UpdateItem
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - cognito-idp:*
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - "ses:"
+            - "ses:"
+            - "ses:"
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - "s3:Get*"
+            - "s3:Put*"
+            - "s3:Delete*"
+            - "s3:ListBucket"
+          Resource: "*"
+
+functions:
+  customAuthorizer:
+    handler: utils/customAuthorizer.customAuthorizer
+  helloEmail:
+    handler: api/transactional/helloEmail.helloEmail
+    events:
+      - http:
+          path: helloemail
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          # authorizer:
+          #   arn: ${self:custom.AUTHORIZER_ARN}
+          #   type: request
+  sendEmailToSegments:
+    handler: api/email/sendEmailToSegments.sendEmailToTopicMembers
+    description: Push email to segments
+    events:
+      - http:
+          path: email/send-to-segments
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          authorizer:
+            name: customAuthorizer
+            type: request
+
+  getEmail:
+    handler: api/email/getEmail.getEmail
+    description: Get email
+    events:
+      - http:
+          path: email/get
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          queryStringParameters:
+            emailId: true
+          authorizer:
+            name: customAuthorizer
+            type: request
+
+  updateEmail:
+    handler: api/email/updateEmail.updateEmail
+    description: Update email
+    events:
+      - http:
+          path: email/update
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          queryStringParameters:
+            emailId: true
+          authorizer:
+            name: customAuthorizer
+            type: request
+
+  deleteEmail:
+    handler: api/email/deleteEmail.deleteEmail
+    description: delete email
+    events:
+      - http:
+          path: email/delete
+          method: delete
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          queryStringParameters:
+            emailId: true
+          authorizer:
+            name: customAuthorizer
+            type: request
+  exportExcel:
+    handler: api/log/emailExportExcel.emailExportExcel
+    description: Export email
+    events:
+      - http:
+          path: email/export
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          queryStringParameters:
+            appId: true
+            startDate: true
+            endDate: true
+          authorizer:
+            name: customAuthorizer
+            type: request
+
+  listEmail:
+    handler: api/email/listEmails.listEmails
+    description: List email
+    events:
+      - http:
+          path: email/list
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          queryStringParameters:
+            appId: true
+          authorizer:
+            name: customAuthorizer
+            type: request
+
+  createTransactionalLog:
+    handler: api/log/transactional/create.create
+    events:
+      - http:
+          path: transactional/log
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          private: true
+  getTransactionalLog:
+    handler: api/log/transactional/get.get
+    events:
+      - http:
+          path: transactional/log/{id}
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          private: true
+  listTransactionalLog:
+    handler: api/log/transactional/list.list
+    events:
+      - http:
+          path: transactional/log
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          # authorizer:
+          #   arn: ${self:custom.AUTHORIZER_ARN}
+          #   type: request
+  updateTransactionalLog:
+    handler: api/log/transactional/update.update
+    events:
+      - http:
+          path: transactional/log
+          method: put
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          private: true
+  updateTransactionalABLog:
+    handler: api/log/transactional/updateABtest.updateAB
+    events:
+      - http:
+          path: transactional/abtest/log
+          method: put
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          private: true
+
+  sendEmailToSegmentsSmtp:
+    handler: api/transactional/sendEmailToSegmentsSmtp.sendEmailToTopicMembers
+    events:
+      - http:
+          path: transactional/send-email-segments-smtp
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          private: true
+  uploadHTML:
+    handler: api/transactional/uploadHTML.uploadHTML
+    events:
+      - http:
+          path: transactional/html
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          # authorizer:
+          #   arn: ${self:custom.AUTHORIZER_ARN}
+          #   type: request
+  getHTML:
+    handler: api/transactional/getHTML.getHTML
+    events:
+      - http:
+          path: transactional/html/{id}
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          # authorizer:
+          #   arn: ${self:custom.AUTHORIZER_ARN}
+          #   type: request
+
+  scheduledEmails:
+    handler: api/cron/scheduledEmails.handler
+    events:
+      - schedule: rate(1 minutes)
+
+  getChartForEmailSent:
+    handler: api/transactional/getChartForEmailSent.getChartForEmailSent
+    events:
+      - http:
+          path: transactional/LineChartForSent
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          # authorizer:
+          #   arn: ${self:custom.AUTHORIZER_ARN}
+          #   type: request
+  getChartByEmailId:
+    handler: api/getChartByEmailId.getChartByEmailId
+    memorySize: 1536
+    description: Chart For message by id
+    timeout: 30
+    events:
+      - http:
+          path: email/getChartForEmail
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+          # private: true
+          authorizer:
+            name: customAuthorizer
+            type: request
+  declareEmail2Token:
+    handler: api/email/declareEmail2Token.declareEmail2Token
+    events:
+      - http:
+          path: email/declareEmail2Token
+          method: put
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Origin
+  #          private: true
+
+resources:
+  Resources:
+    EmailLogsTable:
+      Type: "AWS::DynamoDB::Table"
+      DeletionPolicy: Retain
+      Properties:
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.EMAIL_LOGS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: "scenarioId"
+            AttributeType: "S"
+          - AttributeName: "logId"
+            AttributeType: "S"
+          - AttributeName: "createdAt"
+            AttributeType: "N"
+        KeySchema:
+          - AttributeName: "scenarioId"
+            KeyType: "HASH"
+          - AttributeName: "logId"
+            KeyType: "RANGE"
+        GlobalSecondaryIndexes:
+          - IndexName: logId-createdAt-index
+            KeySchema:
+              - AttributeName: logId
+                KeyType: HASH
+              - AttributeName: "createdAt"
+                KeyType: "RANGE"
+            Projection:
+              ProjectionType: ALL
+          - IndexName: scenarioId-createdAt-index
+            KeySchema:
+              - AttributeName: scenarioId
+                KeyType: HASH
+              - AttributeName: "createdAt"
+                KeyType: "RANGE"
+            Projection:
+              ProjectionType: ALL
