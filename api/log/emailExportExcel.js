@@ -41,10 +41,12 @@ exports.emailExportExcel = async (event, context) => {
       "Active": item.isActive,
       "Scheduled": item.isScheduled,
       "Opened": item.opened ?? "",
-      "Received": item.received ?? "",
+      "Delivered": item.delivered ?? "",
       "Segment Name": item.topicName ?? "",
-      "Total Sent": item.totalSent ?? "",
+      "Total Sent": item.totalDestination ?? "",
       "Type": item.type ?? "",
+      "Updated By": item.updatedBy ?? "",
+      "Created By": item.createdBy ?? "",
     };
 
     if (index === 0) {
@@ -85,13 +87,21 @@ exports.emailExportExcel = async (event, context) => {
   try {
     const buffer = await workbook.xlsx.writeBuffer();
     const base64Buffer = Buffer.from(buffer).toString("base64");
+
+    let fileName = "Emails";
+    if (startDate && endDate) {
+      const formattedStartDate = format(new Date(startDate * 1000), "yyyyMMdd");
+      const formattedEndDate = format(new Date(endDate * 1000), "yyyyMMdd");
+      fileName += `_${formattedStartDate}_${formattedEndDate}`;
+    }
+    fileName += ".xlsx";
     return {
       statusCode: 200,
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Credentials": true,
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": "attachment; filename=" + `messages.xlsx`
+        "Content-Disposition": `attachment; filename="${fileName}"`
       },
       isBase64Encoded: true,
       body: base64Buffer

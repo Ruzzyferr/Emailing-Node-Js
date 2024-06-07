@@ -1,73 +1,63 @@
 const nodemailer = require('nodemailer');
 const AWS = require("aws-sdk");
 const { v4: uuidv4 } = require("uuid");
-const { responseStatus } = require("../../utils/response");
+const {responseStatus} = require("../../utils/response");
 const docClient = new AWS.DynamoDB.DocumentClient();
 const axios = require('axios');
-const cheerio = require('cheerio');
+const cheerio = require("cheerio");
 
-// const smtpConfig = {
-//     host: process.env.SMTP_HOST,
-//     port: process.env.SMTP_PORT,
-//     secure: false,
-//     auth: {
-//         user: process.env.SMTP_USER,
-//         pass: process.env.SMTP_PASS
-//     }
-// };
+const smtpConfig = {
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    secure: false,
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+    }
+};
 
 const CHUNK_SIZE = 100;
 
-exports.sendEmailToTopicMembers = async (event, context, callback) => {
+exports.sendEmailByReceivedEmailList = async (event, context, callback) => {
     console.log(event);
     const requestBody = JSON.parse(event.body);
     console.log("FROM: " + requestBody.from);
     const { html, links } = extractLinks(requestBody.html);
     const mailOptions = {
-        from: '"BELLONA" <noreply@hellosmpl.com>',
+        from: requestBody.from,
         to: '',
         subject: requestBody.subject,
-        html: html,
+        html: requestBody.html,
     };
 
     try {
-        const { appId } = requestBody;
+        const { appId, emailList } = requestBody;
 
-
-
-        const topicMails = await getTopicMails(appId, requestBody.topicName);
-        if (!topicMails || topicMails.length === 0) {
+        if (!emailList || emailList.length === 0) {
             return responseStatus(400, 'Email list is empty.');
         }
 
-        let smtpConfig;
+        const smtpConfig = await getSmtpConfig(appId);
 
-            smtpConfig = await getSmtpConfig(appId);
-        if (smtpConfig.statusCode === 404){
+        if(smtpConfig.statusCode === 404){
             return { statusCode: 404, body: `SMTP configuration not found for appId: ${appId}` };
         }
-
-        console.log(smtpConfig);
 
         const {isScheduled, scheduledDate } = requestBody;
 
         if (isScheduled && scheduledDate) {
-            // Eğer planlanmış bir e-posta ise ve scheduledDate alanı varsa, sadece tabloya kaydet
-            await submitEmailTable(requestBody, 0, topicMails.length);
-            await logLinks(links, '');
+
+            await submitEmailTable(requestBody, 0, emailList.length, emailList);
             return responseStatus(200, 'Email scheduled successfully.');
         }
 
         const nowDate = Math.floor(new Date().getTime() / 1000);
         const emailLogs = [];
-        const consentedEmails = await checkIYSConsentList(topicMails);
 
-        console.log("CONS LIST: +++" + consentedEmails);
-        if(consentedEmails.length === 0){
-            return responseStatus(400, 'Emails are not consented');
-        }
+        const consentedEmails = await checkIYSConsentList(emailList);
+
         // Separate non-consented emails
-        const nonConsentedEmails = topicMails.filter(email => !consentedEmails.includes(email));
+        const nonConsentedEmails = emailList.filter(email => !consentedEmails.includes(email));
 
         // Send emails in chunks of 100
         let totalSent = 0;
@@ -110,7 +100,7 @@ exports.sendEmailToTopicMembers = async (event, context, callback) => {
         }
 
         // Submit email table
-        const emailTableId = await submitEmailTable(requestBody, totalSent, topicMails.length);
+        const emailTableId = await submitEmailTable(requestBody, totalSent, emailList.length);
 
         // Log links
         const trimmedString = emailTableId.body.substring(1, emailTableId.body.length - 1);
@@ -122,6 +112,8 @@ exports.sendEmailToTopicMembers = async (event, context, callback) => {
         throw error;
     }
 };
+
+
 
 async function sendEmail(mailOptions, smtpConfig) {
     const transporter = nodemailer.createTransport(smtpConfig);
@@ -136,30 +128,6 @@ async function sendEmail(mailOptions, smtpConfig) {
     }
 }
 
-async function getTopicMails(appId, topicName) {
-    const params = {
-        TableName: process.env.TOKEN_TABLE,
-        FilterExpression: "#topicName = :topicValue and #appId = :appValue and attribute_exists(emails)",
-        ExpressionAttributeValues: {
-            ":topicValue": topicName,
-            ":appValue": appId
-        },
-        ExpressionAttributeNames: {
-            "#topicName": "topicName",
-            "#appId": "appId"
-        },
-    };
-
-    try {
-        const data = await docClient.scan(params).promise();
-        const mails = data.Items.map(item => item.emails);
-        console.log("Token table data ----------: " + mails);
-        return mails.flat();
-    } catch (error) {
-        console.error("Error retrieving topic mails:", error);
-        throw error;
-    }
-}
 
 async function submitEmailTable(data, totalSent, totalDestination) {
     const nowDate = Math.floor(new Date().getTime() / 1000);
@@ -185,7 +153,7 @@ async function submitEmailTable(data, totalSent, totalDestination) {
             updatedBy: data.updatedBy,
             createdBy: data.createdBy,
             emailList: data.emailList,
-            emailListName: data.emailListName,
+            emailListName: data.emailListName
         },
         ReturnValues: "ALL_OLD"
     };
@@ -233,6 +201,26 @@ async function saveEmailLogs(emailLogs) {
     }
 }
 
+const saveFailedEmail = async (emailId, recipient) => {
+    const params = {
+        TableName: process.env.EMAIL_LOGS_TABLE,
+        Item: {
+            emailId: emailId,
+            recipient: recipient,
+            status: 'Failed',
+            timestamp: Date.now()
+        }
+    };
+
+    try {
+        await docClient.put(params).promise();
+        console.log("Failed email saved successfully.");
+    } catch (err) {
+        console.error("Error saving failed email:", err);
+        throw err;
+    }
+};
+
 async function checkIYSConsentList(emails) {
     const IYS_API_URL = process.env.IYS_API_URL; // İYS API URL
     const IYS_API_KEY = process.env.IYS_API_KEY; // İYS API key
@@ -260,6 +248,7 @@ async function checkIYSConsentList(emails) {
         throw new Error(`IYS consent list check error: ${error.message}`);
     }
 }
+
 
 function extractLinks(html) {
     const $ = cheerio.load(html);
@@ -296,14 +285,13 @@ async function logLinks(links, emailId) {
     const linkBatches = [];
 
 
-
-    // Linkleri batchSize'e göre parçalara ayır
     for (let i = 0; i < links.length; i += batchSize) {
         linkBatches.push(links.slice(i, i + batchSize));
     }
-    const nowDate = Math.floor(new Date().getTime() / 1000);
-    // Her bir parça için kaydetme işlemini gerçekleştir
+
+
     for (const batch of linkBatches) {
+        const nowDate = Math.floor(new Date().getTime() / 1000);
         const linkLogs = batch.map(link => ({
             id: link.id,
             emailId: emailId,
@@ -342,7 +330,6 @@ async function getSmtpConfig(appId) {
 
     try {
         const result = await docClient.scan(params).promise();
-
         if (result.Items.length === 0) {
             return { statusCode: 404, body: `SMTP configuration not found for appId: ${appId}` };
         }
@@ -361,3 +348,4 @@ async function getSmtpConfig(appId) {
         throw error;
     }
 }
+

@@ -11,14 +11,18 @@ exports.getChartByEmailId = async (event, context, callback) => {
   try {
     let appId;
     let emailId;
+    let days;
+
     if (
         event.queryStringParameters &&
         event.queryStringParameters.appId &&
-        event.queryStringParameters.emailId
+        event.queryStringParameters.emailId &&
+        event.queryStringParameters.days
     ) {
       emailId = event.queryStringParameters.emailId;
       appId = event.queryStringParameters.appId;
-      console.log("emailId, appId:", emailId, appId);
+      days = parseInt(event.queryStringParameters.days, 10);
+      console.log("emailId, appId, days:", emailId, appId, days);
     } else {
       return responseStatus(400, {
         email: "empty queryStrings",
@@ -26,9 +30,9 @@ exports.getChartByEmailId = async (event, context, callback) => {
     }
 
     const emailData = await getEmailById(appId, emailId);
-    const chartData = await createChartData(emailData);
+    const chartData = await createChartData(emailData, days);
     return responseStatus(200, {
-      chartData: chartData
+      chartData: chartData,
     });
   } catch (err) {
     console.log("Error:", err);
@@ -53,13 +57,13 @@ const getEmailById = async (appId, emailId) => {
   return data.Items;
 };
 
-const createChartData = async (emailList) => {
+const createChartData = async (emailList, days) => {
   const oneDay = 60 * 60 * 24;
   const nowDate = Math.floor(new Date().getTime() / 1000);
-  const thirtyDaysAgo = nowDate - oneDay * 30;
+  const startDate = nowDate - oneDay * days;
 
   // Veri toplama döngüsü
-  let date = thirtyDaysAgo;
+  let date = startDate;
   let dateArrs = [];
   while (date <= nowDate) {
     dateArrs.push(date);
@@ -69,33 +73,37 @@ const createChartData = async (emailList) => {
   // Sonuçları işleme
   const lastArr = dateArrs.map((date) => {
     let opened = 0;
-    let received = emailList.filter(emailData => emailData.createdAt <= date).length;
+    let failed = 0;
+    let iysBlocked = 0;
+    let delivered = emailList.filter(emailData => emailData.createdAt <= date).length;
 
     // Her email öğesini kontrol et
     emailList.forEach(emailData => {
       const updatedAt = emailData.updatedAt || emailData.createdAt; // Güncellenmiş tarih yoksa oluşturulma tarihini kullan
 
-
-      if (updatedAt <= date && emailData.affirmation === "opened" ) {
+      if (updatedAt <= date && emailData.affirmation === "opened") {
         opened += 1;
+      }
+      if (updatedAt <= date && emailData.affirmation === "failed") {
+        failed += 1;
+      }
+      if (updatedAt <= date && emailData.affirmation === "iysBlocked") {
+        iysBlocked += 1;
       }
     });
 
-    // Tarihi yerel zamana dönüştür
+    // Tarihi ISO formatına dönüştür
     const timestampToDate = new Date(date * 1000);
-    const localDate = timestampToDate.toLocaleDateString();
+    const isoDate = timestampToDate.toISOString();
 
     return {
-      date: localDate,
+      date: isoDate,
       opened: opened,
-      received: received,
+      delivered: delivered,
+      iysBlocked: iysBlocked,
+      failed: failed,
     };
   });
 
   return lastArr;
 };
-
-
-
-
-

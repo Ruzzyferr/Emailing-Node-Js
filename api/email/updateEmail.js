@@ -61,8 +61,18 @@ const updateEmailContent = async (emailData, newContent) => {
     emailData.subject = newEmailContent.subject;
     emailData.scenarioId = newEmailContent.scenarioId;
     emailData.topicName = newEmailContent.topicName;
+    emailData.isScheduled = true;
+
+    if (newEmailContent.emailList && newEmailContent.emailList.length > 0) {
+        emailData.emailList = newEmailContent.emailList;
+    }
+
+    emailData.emailListName = newEmailContent.emailListName;
     emailData.scheduledDate = newEmailContent.scheduledDate;
-    emailData.updatedDate = Date.now();
+    emailData.type = newEmailContent.type;
+    emailData.createdBy = newEmailContent.createdBy;
+    emailData.updatedBy = newEmailContent.updatedBy;
+    emailData.updatedAt = Date.now();
 
 
     // Update the email in the database
